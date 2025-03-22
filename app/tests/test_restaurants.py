@@ -15,7 +15,7 @@ class RestaurantsTestCase(unittest.TestCase):
         self.app_context.push()
         db.create_all()
 
-        # Create test users
+        # Crea usuarios test
         self.admin_user = User(
             username='admin_user',
             email='admin@example.com',
@@ -32,12 +32,12 @@ class RestaurantsTestCase(unittest.TestCase):
         )
         self.regular_user.save_to_db()
 
-        # Get tokens
+        # Obtiene tokens
         with self.app.test_request_context():
             self.admin_token = create_access_token(identity=self.admin_user.id)
             self.user_token = create_access_token(identity=self.regular_user.id)
 
-        # Create test restaurant
+        # Crea restaurante de t est
         self.test_restaurant = Restaurant(
             name='Test Restaurant',
             address='123 Test St',
@@ -55,7 +55,7 @@ class RestaurantsTestCase(unittest.TestCase):
         self.app_context.pop()
 
     def test_create_restaurant(self):
-        # Test creating a restaurant as admin
+        # Test creando restaurante como admin
         response = self.client.post(
             '/restaurants',
             headers={'Authorization': f'Bearer {self.admin_token}'},
@@ -72,7 +72,7 @@ class RestaurantsTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertIn('Restaurant created successfully', response.get_json()['message'])
 
-        # Test creating a restaurant as regular user (should fail)
+        # Test creando restaurante como usuario normal (deberia de fallar)
         response = self.client.post(
             '/restaurants',
             headers={'Authorization': f'Bearer {self.user_token}'},
@@ -90,7 +90,7 @@ class RestaurantsTestCase(unittest.TestCase):
         self.assertIn('Admin privileges required', response.get_json()['message'])
 
     def test_get_restaurants(self):
-        # Test getting all restaurants
+        # Test haciendo get de todos los restaurantes
         response = self.client.get('/restaurants')
         self.assertEqual(response.status_code, 200)
         restaurants = response.get_json()
@@ -98,20 +98,20 @@ class RestaurantsTestCase(unittest.TestCase):
         self.assertEqual(restaurants[0]['name'], 'Test Restaurant')
 
     def test_get_restaurant(self):
-        # Test getting a specific restaurant
+        # Test obteniendo un restaurante especifico
         response = self.client.get(f'/restaurants/{self.test_restaurant.id}')
         self.assertEqual(response.status_code, 200)
         restaurant = response.get_json()
         self.assertEqual(restaurant['name'], 'Test Restaurant')
         self.assertEqual(restaurant['address'], '123 Test St')
 
-        # Test getting non-existent restaurant
+        # Test obteniendo restaurantes inexistentes
         response = self.client.get('/restaurants/999')
         self.assertEqual(response.status_code, 404)
         self.assertIn('Restaurant not found', response.get_json()['message'])
 
     def test_update_restaurant(self):
-        # Test updating as admin
+        # Test actualizando como admin
         response = self.client.put(
             f'/restaurants/{self.test_restaurant.id}',
             headers={'Authorization': f'Bearer {self.admin_token}'},
@@ -124,13 +124,13 @@ class RestaurantsTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('Restaurant updated successfully', response.get_json()['message'])
 
-        # Verify update
+        # Verifica la actualizacion
         response = self.client.get(f'/restaurants/{self.test_restaurant.id}')
         restaurant = response.get_json()
         self.assertEqual(restaurant['name'], 'Updated Restaurant')
         self.assertEqual(restaurant['description'], 'Updated Description')
 
-        # Test updating as regular user (should fail)
+        # Test actualizando como usuario normal (deberia fallar)
         response = self.client.put(
             f'/restaurants/{self.test_restaurant.id}',
             headers={'Authorization': f'Bearer {self.user_token}'},
@@ -143,7 +143,7 @@ class RestaurantsTestCase(unittest.TestCase):
         self.assertIn('Permission denied', response.get_json()['message'])
 
     def test_delete_restaurant(self):
-        # Test deleting as admin
+        # Test borrando como admin
         response = self.client.delete(
             f'/restaurants/{self.test_restaurant.id}',
             headers={'Authorization': f'Bearer {self.admin_token}'}
@@ -151,7 +151,7 @@ class RestaurantsTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('Restaurant deleted successfully', response.get_json()['message'])
 
-        # Verify deletion
+        # Verifica el eliminado
         response = self.client.get(f'/restaurants/{self.test_restaurant.id}')
         self.assertEqual(response.status_code, 404)
         self.assertIn('Restaurant not found', response.get_json()['message'])
