@@ -64,22 +64,22 @@ def create_order():
     data = request.get_json()
     current_user_id = get_jwt_identity()
     
-    # Validate required fields
+    # Valida los campos requeridos
     required_fields = ['pickup_time', 'restaurant_id', 'items']
     for field in required_fields:
         if field not in data:
             return jsonify({'message': f'Missing required field: {field}'}), 400
     
-    # Verify restaurant exists
+    # Ve si el restaurante existe
     restaurant = Restaurant.query.get(data['restaurant_id'])
     if not restaurant:
         return jsonify({'message': 'Restaurant not found'}), 404
     
-    # Validate items
+    # Valida items
     if not isinstance(data['items'], list) or len(data['items']) == 0:
         return jsonify({'message': 'Order must include at least one item'}), 400
     
-    # Calculate total and verify menu items
+    # Calcula el total y verifica los items del menu
     total = 0
     for item in data['items']:
         if 'menu_id' not in item or 'quantity' not in item:
@@ -94,13 +94,13 @@ def create_order():
         
         total += menu_item.price * item['quantity']
     
-    # Parse pickup time
+    # Parsea el tiempo de recogida
     try:
         pickup_time = datetime.strptime(data['pickup_time'], '%Y-%m-%d %H:%M')
     except ValueError:
         return jsonify({'message': 'Invalid pickup_time format. Use YYYY-MM-DD HH:MM'}), 400
     
-    # Create new order
+    # Crea nueva orden
     new_order = Order(
         status='pending',
         pickup_time=pickup_time,
@@ -113,7 +113,7 @@ def create_order():
     try:
         new_order.save_to_db()
         
-        # Create order items
+        # Crea nuevos items en la orden
         for item in data['items']:
             menu_item = Menu.query.get(item['menu_id'])
             order_item = OrderItem(
@@ -162,7 +162,7 @@ def get_order(id):
     if not order:
         return jsonify({'message': 'Order not found'}), 404
     
-    # Check permissions - only the order owner or restaurant admin can view it
+    # Ve los permisos - solo el admin de restaurante o admin pueden verlo
     current_user = User.query.get(current_user_id)
     restaurant = Restaurant.query.get(order.restaurant_id)
     
@@ -239,7 +239,7 @@ def update_order_status(id):
     if not order:
         return jsonify({'message': 'Order not found'}), 404
     
-    # Only restaurant admin can update order status
+    # Solo admins del restaurante pueden actualizar la orden
     restaurant = Restaurant.query.get(order.restaurant_id)
     current_user = User.query.get(current_user_id)
     

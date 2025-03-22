@@ -3,7 +3,7 @@ from datetime import timedelta
 
 class Config:
     # Configuración de la base de datos
-    SQLALCHEMY_DATABASE_URI = 'postgresql://postgres:postgres@db:5432/restaurant_api'
+    SQLALCHEMY_DATABASE_URI = 'postgresql+psycopg3://postgres:postgres@db:5432/restaurant_api'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # Configuración de JWT

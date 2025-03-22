@@ -59,18 +59,18 @@ def create_restaurant():
     data = request.get_json()
     current_user_id = get_jwt_identity()
     
-    # Check if user is admin
+    # Verifica si es admin
     current_user = User.query.get(current_user_id)
     if current_user.role != 'admin':
         return jsonify({'message': 'Admin privileges required'}), 403
     
-    # Validate required fields
+    # Valida los campos
     required_fields = ['name', 'address', 'phone', 'open_time', 'close_time']
     for field in required_fields:
         if field not in data:
             return jsonify({'message': f'Missing required field: {field}'}), 400
     
-    # Parse time fields
+    # Parse los campos de tiempo
     from datetime import datetime
     try:
         open_time = datetime.strptime(data['open_time'], '%H:%M').time()
@@ -78,7 +78,7 @@ def create_restaurant():
     except ValueError:
         return jsonify({'message': 'Invalid time format. Use HH:MM'}), 400
     
-    # Create new restaurant
+    # Crea nuevo restaurante
     new_restaurant = Restaurant(
         name=data['name'],
         address=data['address'],
@@ -218,14 +218,14 @@ def update_restaurant(id):
     if not restaurant:
         return jsonify({'message': 'Restaurant not found'}), 404
     
-    # Check if user is admin or restaurant admin
+    # Verifica si el usuario es admin o admin de restaurante 
     current_user = User.query.get(current_user_id)
     if restaurant.admin_id != current_user_id and current_user.role != 'admin':
         return jsonify({'message': 'Permission denied'}), 403
     
     data = request.get_json()
     
-    # Update fields
+    # Actualiza campos
     if 'name' in data:
         restaurant.name = data['name']
     if 'address' in data:
@@ -235,7 +235,7 @@ def update_restaurant(id):
     if 'description' in data:
         restaurant.description = data['description']
     
-    # Parse time fields if provided
+    # Parse campos de tiempo si son enviados
     from datetime import datetime
     if 'open_time' in data:
         try:
@@ -285,7 +285,7 @@ def delete_restaurant(id):
     if not restaurant:
         return jsonify({'message': 'Restaurant not found'}), 404
     
-    # Check if user is admin or restaurant admin
+    #Verifica si el usuario es admin o admin de restaurante 
     current_user = User.query.get(current_user_id)
     if restaurant.admin_id != current_user_id and current_user.role != 'admin':
         return jsonify({'message': 'Permission denied'}), 403
