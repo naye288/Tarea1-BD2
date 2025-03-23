@@ -16,7 +16,7 @@ from app.routes.orders import orders_bp
 
 from config import Config
 
-def create_app(config_class=Config):
+def create_app(config_class=Config, testing=False):
     app = Flask(__name__)
     app.config.from_object(config_class)
     
@@ -55,6 +55,11 @@ def create_app(config_class=Config):
         ]
     })
     
+    # configs
+    if testing:
+        app.config['TESTING'] = True
+        app.config['JWT_SECRET_KEY'] = 'test-secret'
+
     # Registrar blueprints
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(users_bp, url_prefix='/users')
