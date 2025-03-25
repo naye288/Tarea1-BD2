@@ -1,13 +1,14 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from flask import json
-from app import create_app  # Asegúrate de tener una función create_app en tu proyecto.
+from app.app import create_app  # Importa desde app.py
 from app.models.user import User
+from config import TestConfig
+
 
 @pytest.fixture
 def client():
-    app = create_app()
-    app.config['TESTING'] = True
+    app = create_app(config_class=TestConfig)
     with app.test_client() as client:
         yield client
 
