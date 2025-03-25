@@ -1,13 +1,14 @@
 import json
 import pytest
 from unittest.mock import patch, MagicMock
-from app import create_app  # Asegúrate de tener una función para crear tu app Flask
+from app.app import create_app  # Importa desde app.py
 from app.models.user import User
+from config import TestConfig
 
 
 @pytest.fixture
 def client():
-    app = create_app(testing=True)
+    app = create_app(config_class=TestConfig)
     with app.test_client() as client:
         yield client
 
@@ -26,7 +27,7 @@ def test_register_success(client):
          patch.object(User, 'generate_hash', return_value='hashed_password'), \
          patch.object(User, 'save_to_db', return_value=True):
 
-        response = client.post('/register', data=json.dumps(user_data), content_type='application/json')
+        response = client.post('/auth/register', data=json.dumps(user_data), content_type='application/json')
 
         assert response.status_code == 201
         assert response.json['message'] == 'User created successfully'
@@ -40,7 +41,7 @@ def test_register_existing_username(client):
     }
 
     with patch.object(User, 'find_by_username', return_value=MagicMock()):
-        response = client.post('/register', data=json.dumps(user_data), content_type='application/json')
+        response = client.post('/auth/register', data=json.dumps(user_data), content_type='application/json')
 
         assert response.status_code == 400
         assert response.json['message'] == 'Username already exists'
@@ -56,7 +57,7 @@ def test_register_existing_email(client):
     with patch.object(User, 'find_by_username', return_value=None), \
          patch.object(User, 'find_by_email', return_value=MagicMock()):
 
-        response = client.post('/register', data=json.dumps(user_data), content_type='application/json')
+        response = client.post('/auth/register', data=json.dumps(user_data), content_type='application/json')
 
         assert response.status_code == 400
         assert response.json['message'] == 'Email already exists'
@@ -73,7 +74,7 @@ def test_register_invalid_role(client):
     with patch.object(User, 'find_by_username', return_value=None), \
          patch.object(User, 'find_by_email', return_value=None):
 
-        response = client.post('/register', data=json.dumps(user_data), content_type='application/json')
+        response = client.post('/auth/register', data=json.dumps(user_data), content_type='application/json')
 
         assert response.status_code == 400
         assert response.json['message'] == 'Invalid role'
@@ -94,7 +95,7 @@ def test_login_success(client):
          patch.object(User, 'verify_hash', return_value=True), \
          patch('app.routes.auth.create_access_token', return_value='fake_token'):
 
-        response = client.post('/login', data=json.dumps(user_data), content_type='application/json')
+        response = client.post('/auth/login', data=json.dumps(user_data), content_type='application/json')
 
         assert response.status_code == 200
         assert response.json['message'] == 'Logged in successfully'
@@ -111,7 +112,7 @@ def test_login_user_not_found(client):
 
     with patch.object(User, 'find_by_username', return_value=None):
 
-        response = client.post('/login', data=json.dumps(user_data), content_type='application/json')
+        response = client.post('/auth/login', data=json.dumps(user_data), content_type='application/json')
 
         assert response.status_code == 404
         assert response.json['message'] == 'User not found'
@@ -129,7 +130,7 @@ def test_login_invalid_password(client):
     with patch.object(User, 'find_by_username', return_value=fake_user), \
          patch.object(User, 'verify_hash', return_value=False):
 
-        response = client.post('/login', data=json.dumps(user_data), content_type='application/json')
+        response = client.post('/auth/login', data=json.dumps(user_data), content_type='application/json')
 
         assert response.status_code == 401
         assert response.json['message'] == 'Invalid credentials'

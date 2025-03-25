@@ -1,6 +1,6 @@
 import json
 import unittest
-from app import create_app
+from app.app import create_app  # Importa desde app.py
 from app.models import db
 from app.models.user import User
 from app.models.restaurant import Restaurant
