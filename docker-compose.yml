@@ -1,0 +1,56 @@
+#version: '3.8'
+
+services:
+  api:
+    build: .
+    ports:
+      - "3200:3200"
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+      - auth
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/restaurant_api
+      - JWT_SECRET_KEY=your_jwt_secret_key
+      - FLASK_DEBUG=1
+    networks:
+      - restaurant-network
+
+  db:
+    image: postgres:14
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=restaurant_api
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - restaurant-network
+
+  auth:
+    image: quay.io/keycloak/keycloak:21.1.1
+    ports:
+      - "8080:8080"
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+      - DB_VENDOR=postgres
+      - DB_ADDR=db
+      - DB_DATABASE=keycloak
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+    command: start-dev
+    depends_on:
+      - db
+    networks:
+      - restaurant-network
+
+networks:
+  restaurant-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

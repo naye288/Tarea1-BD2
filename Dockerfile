@@ -1,17 +1,21 @@
-#Todo esto es una prueba por aquello
 FROM python:3.11-slim
 
 WORKDIR /app
 
-#Instala dependencias
+#Instalar dependencias del sistema necesarias para PostgreSQL
+RUN apt-get update && apt-get install -y libpq-dev gcc
+
+# Copiar dependencias
 COPY requirements.txt .
+
+# Instalar dependencias de Python
 RUN pip install --no-cache-dir -r requirements.txt
 
-#Copia el código de la aplicación
+# Copiar el código de la aplicación
 COPY . .
 
-#Expone el puerto
+# Exponer puerto
 EXPOSE 3200
 
-#Comando para ejecutar la aplicación
+# Comando para ejecutar la aplicación
 CMD ["python", "app.py"]
