@@ -1,5 +1,5 @@
 import pytest
-from app import create_app, db
+from app.app import create_app, db
 from app.models.order import Order, OrderItem
 from app.models.restaurant import Restaurant
 from app.models.menu import Menu
@@ -10,7 +10,7 @@ from config import TestConfig
 
 
 @pytest.fixture
-def client():
+def app():
     app = create_app(config_class=TestConfig)
     with app.app_context():
         db.create_all()
