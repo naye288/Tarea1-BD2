@@ -8,10 +8,14 @@ from config import TestConfig
 
 
 @pytest.fixture
-def client():
+def app():
     app = create_app(config_class=TestConfig)
-    with app.test_client() as client:
-        yield client
+    db.init_app(app) 
+    with app.app_context():
+        db.create_all()  # Crea las tablas en la BD de prueba
+        yield app  # Retorna la aplicación
+        db.session.remove()
+        db.drop_all() 
 
 @pytest.fixture
 def client(app):

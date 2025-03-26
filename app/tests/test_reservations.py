@@ -9,7 +9,7 @@ from config import TestConfig
 
 
 @pytest.fixture
-def client():
+def app():
     app = create_app(config_class=TestConfig)
     with app.app_context():
         db.create_all()

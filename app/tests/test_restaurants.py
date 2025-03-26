@@ -1,160 +1,141 @@
-import json
-import unittest
-from app.app import create_app  # Importa desde app.py
-from app.models import db
-from app.models.user import User
+import pytest
+from datetime import datetime
+from app.app import create_app, db
 from app.models.restaurant import Restaurant
+from app.models.user import User
 from flask_jwt_extended import create_access_token
 from config import TestConfig
 
-class RestaurantsTestCase(unittest.TestCase):
-    def setUp(self):
-        self.app = create_app(TestConfig)
-        self.client = self.app.test_client()
-        self.app_context = self.app.app_context()
-        self.app_context.push()
-        db.create_all()
+@pytest.fixture
+def cliente():
+    app = create_app(config_class=TestConfig)
+    with app.test_client() as cliente:
+        yield cliente
 
-        # Crea usuarios test
-        self.admin_user = User(
-            username='admin_user',
-            email='admin@example.com',
-            password=User.generate_hash('password123'),
-            role='admin'
+@pytest.fixture    
+def init_db(cliente):
+    """Initialize the database for testing."""
+    with cliente.app_context():
+        db.create_all()  # Ensure the app context is active when using SQLAlchemy
+    
+        # Crear un usuario admin para pruebas
+        admin = User(username="admin", email="admin@example.com", password="password", role="admin")
+        db.session.add(admin)
+        db.session.commit()
+        
+        # Crear un restaurante de ejemplo
+        restaurant = Restaurant(
+            name="Test Restaurant",
+            address="123 Test St",
+            phone="1234567890",
+            open_time=datetime.strptime("09:00", '%H:%M').time(),
+            close_time=datetime.strptime("22:00", '%H:%M').time(),
+            admin_id=admin.id
         )
-        self.admin_user.save_to_db()
+        db.session.add(restaurant)
+        db.session.commit()
+ 
+@pytest.fixture 
+def auth_header(cliente):
+    # Obtener el token JWT de un usuario admin
+    user = User.query.filter_by(role="admin").first()
+    access_token = create_access_token(identity=user.id)
+    return {'Authorization': f'Bearer {access_token}'}
 
-        self.regular_user = User(
-            username='regular_user',
-            email='regular@example.com',
-            password=User.generate_hash('password123'),
-            role='client'
-        )
-        self.regular_user.save_to_db()
+def test_create_restaurant(cliente, auth_header):
+    data = {
+        "name": "New Restaurant",
+        "address": "456 New St",
+        "phone": "0987654321",
+        "open_time": "10:00",
+        "close_time": "22:00"
+    }
+    
+    response = cliente.post('/restaurants', json=data, headers=auth_header)
+    assert response.status_code == 201
+    assert 'Restaurant created successfully' in response.json['message']
 
-        # Obtiene tokens
-        with self.app.test_request_context():
-            self.admin_token = create_access_token(identity=self.admin_user.id)
-            self.user_token = create_access_token(identity=self.regular_user.id)
 
-        # Crea restaurante de t est
-        self.test_restaurant = Restaurant(
-            name='Test Restaurant',
-            address='123 Test St',
-            phone='123-456-7890',
-            description='Test Description',
-            open_time='08:00',
-            close_time='22:00',
-            admin_id=self.admin_user.id
-        )
-        self.test_restaurant.save_to_db()
+def test_create_restaurant_missing_fields(test_client, auth_header):
+    data = {
+        "name": "Incomplete Restaurant",
+        "address": "789 Incomplete St"
+    }
+    
+    response = test_client.post('/restaurants', json=data, headers=auth_header)
+    assert response.status_code == 400
+    assert 'Missing required field: phone' in response.json['message']
 
-    def tearDown(self):
-        db.session.remove()
-        db.drop_all()
-        self.app_context.pop()
+def test_create_restaurant_invalid_time_format(test_client, auth_header):
+    data = {
+        "name": "Invalid Time Restaurant",
+        "address": "100 Invalid St",
+        "phone": "1234567890",
+        "open_time": "10:60",  # Invalid time format
+        "close_time": "22:00"
+    }
+    
+    response = test_client.post('/restaurants', json=data, headers=auth_header)
+    assert response.status_code == 400
+    assert 'Invalid time format. Use HH:MM' in response.json['message']
 
-    def test_create_restaurant(self):
-        # Test creando restaurante como admin
-        response = self.client.post(
-            '/restaurants',
-            headers={'Authorization': f'Bearer {self.admin_token}'},
-            data=json.dumps({
-                'name': 'New Restaurant',
-                'address': '456 New St',
-                'phone': '987-654-3210',
-                'description': 'New Description',
-                'open_time': '09:00',
-                'close_time': '21:00'
-            }),
-            content_type='application/json'
-        )
-        self.assertEqual(response.status_code, 201)
-        self.assertIn('Restaurant created successfully', response.get_json()['message'])
+def test_get_restaurants(test_client):
+    response = test_client.get('/restaurants')
+    assert response.status_code == 200
+    assert len(response.json) > 0  # Verificar que hay al menos un restaurante
 
-        # Test creando restaurante como usuario normal (deberia de fallar)
-        response = self.client.post(
-            '/restaurants',
-            headers={'Authorization': f'Bearer {self.user_token}'},
-            data=json.dumps({
-                'name': 'Another Restaurant',
-                'address': '789 Another St',
-                'phone': '555-555-5555',
-                'description': 'Another Description',
-                'open_time': '10:00',
-                'close_time': '20:00'
-            }),
-            content_type='application/json'
-        )
-        self.assertEqual(response.status_code, 403)
-        self.assertIn('Admin privileges required', response.get_json()['message'])
+def test_get_restaurant(test_client):
+    restaurant = Restaurant.query.first()
+    response = test_client.get(f'/restaurants/{restaurant.id}')
+    assert response.status_code == 200
+    assert response.json['name'] == restaurant.name
 
-    def test_get_restaurants(self):
-        # Test haciendo get de todos los restaurantes
-        response = self.client.get('/restaurants')
-        self.assertEqual(response.status_code, 200)
-        restaurants = response.get_json()
-        self.assertEqual(len(restaurants), 1)
-        self.assertEqual(restaurants[0]['name'], 'Test Restaurant')
+def test_get_restaurant_not_found(test_client):
+    response = test_client.get('/restaurants/99999')  # ID que no existe
+    assert response.status_code == 404
+    assert 'Restaurant not found' in response.json['message']
 
-    def test_get_restaurant(self):
-        # Test obteniendo un restaurante especifico
-        response = self.client.get(f'/restaurants/{self.test_restaurant.id}')
-        self.assertEqual(response.status_code, 200)
-        restaurant = response.get_json()
-        self.assertEqual(restaurant['name'], 'Test Restaurant')
-        self.assertEqual(restaurant['address'], '123 Test St')
+def test_update_restaurant(test_client, auth_header):
+    restaurant = Restaurant.query.first()
+    data = {
+        "name": "Updated Restaurant",
+        "address": "123 Updated St",
+        "phone": "1234567890",
+        "open_time": "08:00",
+        "close_time": "23:00"
+    }
+    
+    response = test_client.put(f'/restaurants/{restaurant.id}', json=data, headers=auth_header)
+    assert response.status_code == 200
+    assert 'Restaurant updated successfully' in response.json['message']
 
-        # Test obteniendo restaurantes inexistentes
-        response = self.client.get('/restaurants/999')
-        self.assertEqual(response.status_code, 404)
-        self.assertIn('Restaurant not found', response.get_json()['message'])
+def test_update_restaurant_invalid_time_format(test_client, auth_header):
+    restaurant = Restaurant.query.first()
+    data = {
+        "open_time": "25:00",  # Invalid time format
+        "close_time": "22:00"
+    }
+    
+    response = test_client.put(f'/restaurants/{restaurant.id}', json=data, headers=auth_header)
+    assert response.status_code == 400
+    assert 'Invalid open_time format. Use HH:MM' in response.json['message']
 
-    def test_update_restaurant(self):
-        # Test actualizando como admin
-        response = self.client.put(
-            f'/restaurants/{self.test_restaurant.id}',
-            headers={'Authorization': f'Bearer {self.admin_token}'},
-            data=json.dumps({
-                'name': 'Updated Restaurant',
-                'description': 'Updated Description'
-            }),
-            content_type='application/json'
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertIn('Restaurant updated successfully', response.get_json()['message'])
+def test_delete_restaurant(test_client, auth_header):
+    restaurant = Restaurant.query.first()
+    response = test_client.delete(f'/restaurants/{restaurant.id}', headers=auth_header)
+    assert response.status_code == 200
+    assert 'Restaurant deleted successfully' in response.json['message']
 
-        # Verifica la actualizacion
-        response = self.client.get(f'/restaurants/{self.test_restaurant.id}')
-        restaurant = response.get_json()
-        self.assertEqual(restaurant['name'], 'Updated Restaurant')
-        self.assertEqual(restaurant['description'], 'Updated Description')
-
-        # Test actualizando como usuario normal (deberia fallar)
-        response = self.client.put(
-            f'/restaurants/{self.test_restaurant.id}',
-            headers={'Authorization': f'Bearer {self.user_token}'},
-            data=json.dumps({
-                'name': 'User Updated Restaurant'
-            }),
-            content_type='application/json'
-        )
-        self.assertEqual(response.status_code, 403)
-        self.assertIn('Permission denied', response.get_json()['message'])
-
-    def test_delete_restaurant(self):
-        # Test borrando como admin
-        response = self.client.delete(
-            f'/restaurants/{self.test_restaurant.id}',
-            headers={'Authorization': f'Bearer {self.admin_token}'}
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertIn('Restaurant deleted successfully', response.get_json()['message'])
-
-        # Verifica el eliminado
-        response = self.client.get(f'/restaurants/{self.test_restaurant.id}')
-        self.assertEqual(response.status_code, 404)
-        self.assertIn('Restaurant not found', response.get_json()['message'])
-
-if __name__ == '__main__':
-    unittest.main()
+def test_delete_restaurant_permission_denied(test_client, auth_header):
+    # Crear un usuario no admin
+    user = User(username="user", email="user@example.com", password="password", role="user")
+    db.session.add(user)
+    db.session.commit()
+    
+    restaurant = Restaurant.query.first()
+    access_token = create_access_token(identity=user.id)
+    auth_header = {'Authorization': f'Bearer {access_token}'}
+    
+    response = test_client.delete(f'/restaurants/{restaurant.id}', headers=auth_header)
+    assert response.status_code == 403
+    assert 'Permission denied' in response.json['message']
