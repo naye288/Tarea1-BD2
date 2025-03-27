@@ -1,5 +1,5 @@
 from datetime import datetime
-from app.models import db
+from app.extensions import db
 
 class Menu(db.Model):
     __tablename__ = 'menus'

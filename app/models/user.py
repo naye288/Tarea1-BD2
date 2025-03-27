@@ -1,6 +1,6 @@
 from datetime import datetime
 from passlib.hash import pbkdf2_sha256 as sha256
-from app.models import db
+from app.extensions import db
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -17,6 +17,7 @@ class User(db.Model):
     reservations = db.relationship('Reservation', backref='user', lazy=True)
     orders = db.relationship('Order', backref='user', lazy=True)
     
+    
     @classmethod
     def find_by_username(cls, username):
         return cls.query.filter_by(username=username).first()
@@ -32,6 +33,9 @@ class User(db.Model):
     @staticmethod
     def verify_hash(password, hash):
         return sha256.verify(password, hash)
+    
+    def set_password(self, password):
+        self.password = self.generate_hash(password)
     
     def save_to_db(self):
         db.session.add(self)

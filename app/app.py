@@ -1,12 +1,11 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import scoped_session, sessionmaker
 from flask import Flask
 from flask_jwt_extended import JWTManager
 from flask_migrate import Migrate
 from flask_cors import CORS
 from flasgger import Swagger
 from sqlalchemy.dialects import registry
-from app.models import db
+
+from app.extensions import db, jwt, migrate  # <- importamos migrate correctamente desde extensions
 from app.routes.auth import auth_bp
 from app.routes.users import users_bp
 from app.routes.restaurants import restaurants_bp
@@ -20,20 +19,17 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
-    # Forzar a SQLAlchemy a usar psycopg
+    # Registrar dialecto de psycopg3 (opcional, solo si realmente lo usas)
     registry.register("postgresql.psycopg", "psycopg.sqlalchemy", "PsycopgDialect")
-    engine = create_engine('postgresql+psycopg2://postgres:postgres@db:5432/restaurant_api')
-    db_session = scoped_session(sessionmaker(bind=engine))
-    db.metadata.bind = engine
-    db.session = db_session
 
-    # Inicializar otras extensiones
-    migrate = Migrate(app, db)
-    jwt = JWTManager(app)
+    # Inicializar extensiones
+    db.init_app(app)
+    migrate.init_app(app, db)    # <- ESTA es la forma correcta
+    jwt.init_app(app)
     CORS(app)
-    
-    # Configuración de Swagger para documentación de API
-    swagger = Swagger(app, template={
+
+    # Swagger
+    Swagger(app, template={
         "swagger": "2.0",
         "info": {
             "title": "API de Reserva Inteligente de Restaurantes",
@@ -49,24 +45,23 @@ def create_app(config_class=Config):
             }
         },
         "security": [
-            {
-                "Bearer": []
-            }
+            {"Bearer": []}
         ]
     })
 
-    # Registrar blueprints
+    # Registrar Blueprints
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(users_bp, url_prefix='/users')
     app.register_blueprint(restaurants_bp, url_prefix='/restaurants')
     app.register_blueprint(menus_bp, url_prefix='/menus')
     app.register_blueprint(reservations_bp, url_prefix='/reservations')
     app.register_blueprint(orders_bp, url_prefix='/orders')
-    
+
+    # Home
     @app.route('/')
     def home():
         return {"message": "API de Reserva Inteligente de Restaurantes"}
-    
+
     return app
 
 if __name__ == '__main__':

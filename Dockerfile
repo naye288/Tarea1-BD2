@@ -2,6 +2,8 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+ENV PYTHONUNBUFFERED=1
+
 #Instalar dependencias del sistema necesarias para PostgreSQL
 RUN apt-get update && apt-get install -y libpq-dev gcc
 

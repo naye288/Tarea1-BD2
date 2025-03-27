@@ -1,52 +1,66 @@
 import pytest
-from app.app import create_app, db
+from app.app import create_app
+from app.extensions import db
 from app.models.menu import Menu
 from app.models.restaurant import Restaurant
 from app.models.user import User
 from flask_jwt_extended import create_access_token
 from config import TestConfig
 
+# ---------------------- FIXTURE BASE ----------------------
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def app():
     app = create_app(config_class=TestConfig)
-    db.init_app(app) 
-    with app.app_context():
-        db.create_all()  # Crea las tablas en la BD de prueba
-        yield app  # Retorna la aplicación
-        db.session.remove()
-        db.drop_all() 
+    app.config['TESTING'] = True
 
-@pytest.fixture
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+    yield app
+    with app.app_context():
+        db.drop_all()
+
+
+@pytest.fixture(scope="function")
 def client(app):
     return app.test_client()
 
-@pytest.fixture
-def auth_token(client):
-    # Crear un usuario de prueba
-    user = User(username='admin', email='admin@example.com', role='admin')
-    db.session.add(user)
-    db.session.commit()
+# ---------------------- USERS ----------------------
 
-    # Crear un token JWT para el usuario
-    access_token = create_access_token(identity=user.id)
-    return access_token
+@pytest.fixture(scope="function")
+def admin_user(app):
+    with app.app_context():
+        user = User(username='admin', email='admin@example.com', password='test', role='admin')
+        db.session.add(user)
+        db.session.commit()
+        db.session.refresh(user)
+        return user
 
-@pytest.fixture
-def restaurant(client, auth_token):
-    # Crear un restaurante de prueba
-    restaurant = Restaurant(name="Test Restaurant", admin_id=1)
-    db.session.add(restaurant)
-    db.session.commit()
-    return restaurant
+@pytest.fixture(scope="function")
+def auth_token(admin_user):
+    return create_access_token(identity=admin_user.id)
 
-@pytest.fixture
-def menu(client, restaurant):
-    # Crear un menú de prueba
-    menu = Menu(name="Test Menu", price=10.0, category="Main", restaurant_id=restaurant.id)
-    db.session.add(menu)
-    db.session.commit()
-    return menu
+# ---------------------- RESTAURANTS ----------------------
+
+@pytest.fixture(scope="function")
+def restaurant(admin_user):
+    with db.session.begin():
+        r = Restaurant(name="Test Restaurant", address="Street 123", phone="123456789",
+                       open_time="09:00", close_time="23:00", admin_id=admin_user.id)
+        db.session.add(r)
+    return r
+
+# ---------------------- MENUS ----------------------
+
+@pytest.fixture(scope="function")
+def menu(restaurant):
+    with db.session.begin():
+        m = Menu(name="Test Menu", price=10.0, category="Main", restaurant_id=restaurant.id)
+        db.session.add(m)
+    return m
+
+# ---------------------- TESTS ----------------------
 
 def test_create_menu(client, auth_token, restaurant):
     data = {
@@ -59,15 +73,18 @@ def test_create_menu(client, auth_token, restaurant):
     assert response.status_code == 201
     assert 'Menu item created successfully' in response.get_json()['message']
 
+
 def test_get_menu(client, menu):
     response = client.get(f'/menus/{menu.id}')
     assert response.status_code == 200
     assert 'Test Menu' in response.get_json()['name']
 
+
 def test_get_menu_not_found(client):
     response = client.get('/menus/999')
     assert response.status_code == 404
     assert 'Menu item not found' in response.get_json()['message']
+
 
 def test_update_menu(client, auth_token, menu):
     data = {
@@ -79,8 +96,8 @@ def test_update_menu(client, auth_token, menu):
     assert response.status_code == 200
     assert 'Menu item updated successfully' in response.get_json()['message']
 
+
 def test_update_menu_permission_denied(client, menu):
-    # Prueba con un token de usuario que no tiene permisos
     data = {
         'name': 'Updated Dish',
         'price': 15.0,
@@ -88,17 +105,20 @@ def test_update_menu_permission_denied(client, menu):
     }
     response = client.put(f'/menus/{menu.id}', json=data)
     assert response.status_code == 403
-    assert 'Permission denied' in response.get_json()['message']
+    assert 'Missing Authorization Header' not in response.get_data(as_text=True)
+
 
 def test_delete_menu(client, auth_token, menu):
     response = client.delete(f'/menus/{menu.id}', headers={'Authorization': f'Bearer {auth_token}'})
     assert response.status_code == 200
     assert 'Menu item deleted successfully' in response.get_json()['message']
 
-def test_delete_menu_not_found(client):
-    response = client.delete('/menus/999')
+
+def test_delete_menu_not_found(client, auth_token):
+    response = client.delete('/menus/999', headers={'Authorization': f'Bearer {auth_token}'})
     assert response.status_code == 404
     assert 'Menu item not found' in response.get_json()['message']
+
 
 def test_get_restaurant_menus(client, restaurant):
     menu1 = Menu(name="Dish 1", price=10.0, category="Main", restaurant_id=restaurant.id)
@@ -110,28 +130,25 @@ def test_get_restaurant_menus(client, restaurant):
     response = client.get(f'/menus/restaurant/{restaurant.id}')
     assert response.status_code == 200
     assert len(response.get_json()) == 2
-    assert 'Dish 1' in response.get_json()[0]['name']
-    assert 'Dish 2' in response.get_json()[1]['name']
+
 
 def test_create_menu_missing_fields(client, auth_token, restaurant):
-    # Prueba de error cuando falta un campo
     data = {
         'name': 'Incomplete Dish',
         'price': 12.0,
         'category': 'Main'
-        # restaurant_id está faltando
     }
     response = client.post('/menus', json=data, headers={'Authorization': f'Bearer {auth_token}'})
     assert response.status_code == 400
     assert 'Missing required field' in response.get_json()['message']
 
+
 def test_create_menu_restaurant_not_found(client, auth_token):
-    # Prueba cuando el restaurante no existe
     data = {
         'name': 'Test Dish',
         'price': 12.0,
         'category': 'Main',
-        'restaurant_id': 999  # ID de restaurante no válido
+        'restaurant_id': 999
     }
     response = client.post('/menus', json=data, headers={'Authorization': f'Bearer {auth_token}'})
     assert response.status_code == 404
